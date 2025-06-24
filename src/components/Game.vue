@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 
-// Props (gardez si vous voulez passer un message depuis App.vue)
-defineProps<{ msg?: string }>()
-
 // État du jeu
 const shells = ref([
   { hasPearl: false, revealed: false },
@@ -27,15 +24,10 @@ const messageClass = computed(() => {
   return ''
 })
 
-// Charger les scores depuis le localStorage
 onMounted(() => {
-  const savedWins = localStorage.getItem('bonneteau-wins')
-  const savedLosses = localStorage.getItem('bonneteau-losses')
-  const savedStreak = localStorage.getItem('bonneteau-streak')
-  
-  if (savedWins) wins.value = parseInt(savedWins)
-  if (savedLosses) losses.value = parseInt(savedLosses)
-  if (savedStreak) streak.value = parseInt(savedStreak)
+  wins.value = parseInt(localStorage.getItem('bonneteau-wins') || '0')
+  losses.value = parseInt(localStorage.getItem('bonneteau-losses') || '0')
+  streak.value = parseInt(localStorage.getItem('bonneteau-streak') || '0')
 })
 
 const saveScore = () => {
@@ -55,19 +47,13 @@ const getRandomPosition = async (): Promise<number> => {
   try {
     isLoading.value = true
     message.value = 'Récupération de la position aléatoire...'
-    
     const response = await fetch('https://www.random.org/integers/?num=1&min=0&max=2&col=1&base=10&format=plain&rnd=new')
-    
-    if (!response.ok) {
-      throw new Error('Erreur de réseau')
-    }
-    
+    if (!response.ok) throw new Error('Erreur réseau')
     const randomNumber = await response.text()
     return parseInt(randomNumber.trim())
   } catch (error) {
-    console.error('Erreur lors de la récupération du nombre aléatoire:', error)
-    message.value = 'Erreur réseau, utilisation d\'un nombre local...'
-    // Fallback vers un nombre aléatoire local
+    console.error(error)
+    message.value = 'Erreur de réseau, nombre généré localement.'
     return Math.floor(Math.random() * 3)
   } finally {
     isLoading.value = false
@@ -76,36 +62,33 @@ const getRandomPosition = async (): Promise<number> => {
 
 const startNewGame = async () => {
   resetShells()
-  gameState.value = 'showing' // Nouvel état pour montrer la perle
-  
-  // Obtenir la position aléatoire
+  gameState.value = 'showing'
+
+  // Nouvelle position aléatoire
   correctShellIndex.value = await getRandomPosition()
+  shells.value.forEach(shell => (shell.hasPearl = false)) // CORRECTION ICI
   shells.value[correctShellIndex.value].hasPearl = true
-  
-  // Montrer clairement où est la perle en soulevant le coquillage
-  message.value = 'Regardez bien ! La perle est sous ce coquillage... 👀'
+
+  // Affichage temporaire de la perle
+  message.value = 'Regardez bien où est la perle 👀'
   shells.value[correctShellIndex.value].revealed = true
-  
+
   setTimeout(() => {
-    message.value = 'Mémorisez bien la position, les coquillages vont se mélanger !'
+    message.value = 'Mémorisez bien... mélange en cours 🌊'
     setTimeout(() => {
       shells.value[correctShellIndex.value].revealed = false
       gameState.value = 'playing'
       isShuffling.value = true
-      message.value = 'Les coquillages se mélangent... 🌊'
-      
+      message.value = 'À vous de jouer !'
       setTimeout(() => {
         isShuffling.value = false
-        message.value = 'À vous de jouer ! Cliquez sur un coquillage.'
-      }, 2500)
+      }, 2000)
     }, 1000)
   }, 2500)
 }
 
 const selectShell = (index: number) => {
-  if (gameState.value !== 'playing' || isShuffling.value || isLoading.value) {
-    return
-  }
+  if (gameState.value !== 'playing' || isShuffling.value || isLoading.value) return
 
   gameState.value = 'revealed'
   shells.value[index].revealed = true
@@ -114,23 +97,17 @@ const selectShell = (index: number) => {
     wins.value++
     streak.value++
     message.value = `🎉 Bravo ! Vous avez trouvé la perle ! Série de ${streak.value}`
-    
-    // Révéler tous les coquillages après un court délai
-    setTimeout(() => {
-      shells.value.forEach(shell => shell.revealed = true)
-    }, 1000)
   } else {
     losses.value++
     streak.value = 0
     message.value = '💔 Dommage ! La perle était ailleurs...'
-    
-    // Révéler le bon coquillage
-    setTimeout(() => {
-      shells.value.forEach(shell => shell.revealed = true)
-    }, 1000)
   }
-  
+
   saveScore()
+
+  setTimeout(() => {
+    shells.value.forEach(shell => (shell.revealed = true))
+  }, 800)
 }
 
 const resetScore = () => {
@@ -146,68 +123,43 @@ const resetScore = () => {
   <div class="game-container">
     <h1>🐚 Jeu du Bonneteau 🐚</h1>
     <p class="subtitle">Trouvez la perle cachée sous le coquillage !</p>
-    
+
     <div class="score">
-      <div class="score-item">
-        <div>Victoires: {{ wins }}</div>
-      </div>
-      <div class="score-item">
-        <div>Défaites: {{ losses }}</div>
-      </div>
-      <div class="score-item">
-        <div>Série: {{ streak }}</div>
-      </div>
+      <div class="score-item">✅ Victoires : {{ wins }}</div>
+      <div class="score-item">❌ Défaites : {{ losses }}</div>
+      <div class="score-item">🔥 Série : {{ streak }}</div>
     </div>
 
     <div class="message" :class="messageClass">{{ message }}</div>
 
-    <div class="game-area">
-      <div class="shells-container">
-        <div 
-          v-for="(shell, index) in shells" 
-          :key="index"
-          class="shell"
-          :class="{
-            'shuffling': isShuffling,
-            'revealed': (gameState === 'showing' || gameState === 'revealed') && shell.revealed,
-            'correct': gameState === 'revealed' && shell.hasPearl && shell.revealed,
-            'wrong': gameState === 'revealed' && !shell.hasPearl && shell.revealed
-          }"
-          @click="selectShell(index)"
-          :style="{ animationDelay: index * 0.1 + 's' }"
-        >
-          <div class="pearl" v-if="shell.hasPearl"></div>
-        </div>
+    <div class="shells-container">
+      <div
+        v-for="(shell, index) in shells"
+        :key="index"
+        class="shell"
+        :class="{
+          shuffling: isShuffling,
+          revealed: (gameState === 'showing' || gameState === 'revealed') && shell.revealed,
+          correct: gameState === 'revealed' && shell.hasPearl && shell.revealed,
+          wrong: gameState === 'revealed' && !shell.hasPearl && shell.revealed
+        }"
+        @click="selectShell(index)"
+      >
+        <div class="pearl" v-if="shell.hasPearl"></div>
       </div>
     </div>
 
     <div class="controls">
-      <button 
-        class="btn primary" 
-        @click="startNewGame"
-        :disabled="isLoading || isShuffling"
-      >
+      <button class="btn primary" @click="startNewGame" :disabled="isLoading || isShuffling">
         {{ gameState === 'initial' ? 'Commencer' : 'Nouvelle Partie' }}
       </button>
-      
-      <button 
-        class="btn" 
-        @click="resetScore"
-        :disabled="isLoading || isShuffling"
-      >
+      <button class="btn" @click="resetScore" :disabled="isLoading || isShuffling">
         Remettre à zéro
       </button>
     </div>
-
-    <div class="instructions">
-      <strong>Comment jouer :</strong><br>
-      1. Cliquez sur "Commencer" pour placer la perle<br>
-      2. Les coquillages vont se mélanger<br>
-      3. Cliquez sur le coquillage où vous pensez que se trouve la perle<br>
-      4. Tentez de faire la plus longue série possible !
-    </div>
   </div>
 </template>
+
 
 <style scoped>
 .game-container {
