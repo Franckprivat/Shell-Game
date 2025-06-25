@@ -17,18 +17,13 @@ const wins = ref(0)
 const losses = ref(0)
 const streak = ref(0)
 const correctShellIndex = ref(-1)
+const liftedIndexes = ref<number[]>([])
+const shakeIndex = ref(-1)
+let lastPearlPosition = -1
 
-// Ajout refs pour les sons
 const shuffleAudio = ref<HTMLAudioElement | null>(null)
 const winAudio = ref<HTMLAudioElement | null>(null)
 const loseAudio = ref<HTMLAudioElement | null>(null)
-
-// Ajout d'une variable pour savoir quel cup est levé
-const liftedIndex = ref(-1)
-const allLifted = ref(false)
-const shakeIndex = ref(-1)
-
-let lastPearlPosition = -1 // Pour éviter deux fois de suite au même endroit
 
 const messageClass = computed(() => {
   if (isLoading.value) return 'loading'
@@ -37,18 +32,12 @@ const messageClass = computed(() => {
   return ''
 })
 
-const isWin = computed(() => {
-  // Le joueur a gagné si le dernier message est un message de victoire
-  return message.value.includes('Bravo')
-})
+const isWin = computed(() => message.value.includes('Bravo'))
 
 onMounted(() => {
-  const savedWins = localStorage.getItem('bonneteau-wins')
-  const savedLosses = localStorage.getItem('bonneteau-losses')
-  const savedStreak = localStorage.getItem('bonneteau-streak')
-  if (savedWins) wins.value = parseInt(savedWins)
-  if (savedLosses) losses.value = parseInt(savedLosses)
-  if (savedStreak) streak.value = parseInt(savedStreak)
+  wins.value = parseInt(localStorage.getItem('bonneteau-wins') || '0')
+  losses.value = parseInt(localStorage.getItem('bonneteau-losses') || '0')
+  streak.value = parseInt(localStorage.getItem('bonneteau-streak') || '0')
 })
 
 const saveScore = () => {
@@ -66,50 +55,21 @@ const resetShells = () => {
 }
 
 const animateSwap = (idx1: number, idx2: number) => {
-  // Swap positions for animation
   const temp = shells.value[idx1].position
   shells.value[idx1].position = shells.value[idx2].position
   shells.value[idx2].position = temp
 }
 
-const shuffleShells = async () => {
-  if (shuffleAudio.value) {
-    shuffleAudio.value.currentTime = 0
-    shuffleAudio.value.play()
-  }
-  let swaps = Math.floor(Math.random() * 3) + 3
-  for (let i = 0; i < swaps; i++) {
-    const idx1 = Math.floor(Math.random() * 3)
-    let idx2 = Math.floor(Math.random() * 3)
-    while (idx2 === idx1) idx2 = Math.floor(Math.random() * 3)
-    animateSwap(idx1, idx2)
-    await new Promise(res => setTimeout(res, 250)) // vitesse augmentée
-  }
-  // Après animation, on mélange la perle logiquement
-  const positions = shells.value.map(s => s.position)
-  const logicalShells = [ ...shells.value ]
-  logicalShells.sort((a, b) => a.position - b.position)
-  shells.value.forEach((shell, i) => {
-    shell.hasPearl = logicalShells[i].hasPearl
-  })
-  correctShellIndex.value = shells.value.findIndex(shell => shell.hasPearl)
-  // Réinitialise la position pour ramener les cups à leur place de départ
-  shells.value.forEach((shell, i) => {
-    shell.position = i
-  })
-}
-
 const getRandomPosition = async (): Promise<number> => {
-  let newPosition: number
+  let newPosition = -1
   let tries = 0
   do {
     try {
       isLoading.value = true
       message.value = 'Récupération de la position aléatoire...'
       const response = await fetch('https://www.random.org/integers/?num=1&min=0&max=2&col=1&base=10&format=plain&rnd=new')
-      if (!response.ok) throw new Error('Erreur de réseau')
-      const randomNumber = await response.text()
-      newPosition = parseInt(randomNumber.trim())
+      const text = await response.text()
+      newPosition = parseInt(text.trim())
     } catch {
       message.value = 'Erreur réseau, utilisation d\'un nombre local...'
       newPosition = Math.floor(Math.random() * 3)
@@ -123,62 +83,85 @@ const getRandomPosition = async (): Promise<number> => {
 }
 
 const startNewGame = async () => {
+  // Réinitialise la position visuelle
+  shells.value.forEach((shell, idx) => (shell.position = idx))
   resetShells()
   gameState.value = 'showing'
+  liftedIndexes.value = []
+  shakeIndex.value = -1
   const newPosition = await getRandomPosition()
-  shells.value.forEach((shell) => { shell.hasPearl = false })
   shells.value[newPosition].hasPearl = true
   correctShellIndex.value = newPosition
   shells.value[newPosition].revealed = true
-  liftedIndex.value = newPosition
-  allLifted.value = false
-  shakeIndex.value = -1
-  message.value = `Regardez bien où est la perle 👀`
+  liftedIndexes.value = [newPosition]
+  message.value = `Regardez bien où est la balle 👀`
 
   setTimeout(() => {
     shells.value[newPosition].revealed = false
-    liftedIndex.value = -1
+    liftedIndexes.value = []
     message.value = 'Mémorisez bien... mélange en cours 🌊'
     isShuffling.value = true
     gameState.value = 'shuffling'
+
     setTimeout(async () => {
-      await shuffleShells()
+      shuffleAudio.value?.play()
+      let swaps = Math.floor(Math.random() * 3) + 3
+      for (let i = 0; i < swaps; i++) {
+        const idx1 = Math.floor(Math.random() * 3)
+        let idx2 = Math.floor(Math.random() * 3)
+        while (idx1 === idx2) idx2 = Math.floor(Math.random() * 3)
+        animateSwap(idx1, idx2)
+        await new Promise(res => setTimeout(res, 250))
+      }
+
+      // Réattribue la perle en fonction des nouvelles positions
+      const logical = [...shells.value].sort((a, b) => a.position - b.position)
+      shells.value.forEach((shell, i) => {
+        shell.hasPearl = logical[i].hasPearl
+      })
+      correctShellIndex.value = shells.value.findIndex(s => s.hasPearl)
+
+      // 🚨 NOUVEAU : Réordonne visuellement les cups pour revenir à gauche / centre / droite
+      shells.value.sort((a, b) => a.position - b.position)
+      shells.value.forEach((shell, idx) => (shell.position = idx))
+
       isShuffling.value = false
       gameState.value = 'playing'
       message.value = 'À vous de jouer ! Cliquez sur un gobelet.'
-    }, 1200)
-  }, 2500)
+    }, 1000)
+  }, 2000)
 }
 
 const selectShell = (index: number) => {
   if (gameState.value !== 'playing' || isShuffling.value || isLoading.value) return
   gameState.value = 'revealed'
-  liftedIndex.value = index
-  shells.value.forEach((shell, i) => shell.revealed = false)
+  liftedIndexes.value = [index]
+  shells.value.forEach(shell => (shell.revealed = false))
   shells.value[index].revealed = true
+
   if (shells.value[index].hasPearl) {
     wins.value++
     streak.value++
-    message.value = `🎉 Bravo ! Vous avez trouvé la perle ! Série de ${streak.value}`
-    if (winAudio.value) {
-      winAudio.value.currentTime = 0
-      winAudio.value.play()
-    }
+    message.value = `🎉 Bravo ! Vous avez trouvé la balle ! Série de ${streak.value}`
+    winAudio.value?.play()
   } else {
     losses.value++
     streak.value = 0
-    message.value = '💔 Dommage ! La perle était ailleurs...'
     shakeIndex.value = index
-    if (loseAudio.value) {
-      loseAudio.value.currentTime = 0
-      loseAudio.value.play()
+    message.value = '💔 Dommage ! La balle était ailleurs...'
+    if (correctShellIndex.value !== index) {
+      shells.value[correctShellIndex.value].revealed = true
+      liftedIndexes.value = [index, correctShellIndex.value]
     }
+    loseAudio.value?.play()
   }
+
   setTimeout(() => {
-    liftedIndex.value = -1
+    liftedIndexes.value = []
     shakeIndex.value = -1
     gameState.value = 'initial'
-  }, 1000)
+  }, 2000)
+
   saveScore()
 }
 
@@ -193,6 +176,7 @@ const resetScore = () => {
 </script>
 
 
+
 <template>
   <div class="game-container">
     <h1>🎲 Jeu du Bonneteau</h1>
@@ -205,11 +189,11 @@ const resetScore = () => {
         class="shell"
         :class="{
           revealed: shell.revealed,
-          correct: shell.hasPearl && liftedIndex === index && isWin && gameState === 'revealed',
-          lifted: liftedIndex === index,
+          correct: isWin && liftedIndexes.includes(index) && shell.hasPearl && gameState === 'revealed',
+          lifted: liftedIndexes.includes(index),
           shake: shakeIndex === index
         }"
-        @click="selectShell(index)"
+        @click="gameState === 'playing' ? selectShell(index) : null"
         :style="{ transform: `translateX(${(shell.position - index) * 140}px)`, transition: isShuffling ? 'transform 0.25s' : 'transform 0.3s' }"
       >
         <svg width="120" height="160" viewBox="0 0 120 160" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -227,14 +211,14 @@ const resetScore = () => {
           <path d="M25 30 Q60 10 95 30 L105 140 Q60 155 15 140 Z" fill="url(#cupBody)" stroke="none"/>
           <ellipse cx="60" cy="30" rx="35" ry="12" fill="#cfd8dc" stroke="none"/>
         </svg>
-        <!-- Affiche la perle sous le cup levé lors de la phase d'observation, ou si le joueur a gagné -->
-        <div v-if="shell.hasPearl && ((gameState === 'showing' && liftedIndex === index) || (gameState === 'revealed' && liftedIndex === index && isWin))" class="pearl">🔵</div>
+        <!-- Affiche la balle sous le cup levé qui a la perle, lors de la phase d'observation ou lors de la révélation -->
+        <div v-if="shell.hasPearl && liftedIndexes.includes(index)" class="pearl">🔵</div>
       </div>
     </div>
 
     <div class="controls">
-      <button @click="startNewGame" :disabled="isLoading || isShuffling || gameState === 'revealed'">Commencer</button>
-      <button @click="resetScore" :disabled="isShuffling">Réinitialiser les scores</button>
+      <button @click="startNewGame" :disabled="isLoading || isShuffling || gameState === 'showing' || gameState === 'shuffling' || gameState === 'playing'">Commencer</button>
+      <button @click="resetScore" :disabled="isShuffling || isLoading">Réinitialiser les scores</button>
     </div>
 
     <div class="scoreboard">
