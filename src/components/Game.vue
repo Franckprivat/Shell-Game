@@ -83,7 +83,6 @@ const getRandomPosition = async (): Promise<number> => {
 }
 
 const startNewGame = async () => {
-  // Réinitialise la position visuelle
   shells.value.forEach((shell, idx) => (shell.position = idx))
   resetShells()
   gameState.value = 'showing'
@@ -114,14 +113,12 @@ const startNewGame = async () => {
         await new Promise(res => setTimeout(res, 250))
       }
 
-      // Réattribue la perle en fonction des nouvelles positions
       const logical = [...shells.value].sort((a, b) => a.position - b.position)
       shells.value.forEach((shell, i) => {
         shell.hasPearl = logical[i].hasPearl
       })
       correctShellIndex.value = shells.value.findIndex(s => s.hasPearl)
 
-      // 🚨 NOUVEAU : Réordonne visuellement les cups pour revenir à gauche / centre / droite
       shells.value.sort((a, b) => a.position - b.position)
       shells.value.forEach((shell, idx) => (shell.position = idx))
 
@@ -211,7 +208,7 @@ const resetScore = () => {
           <path d="M25 30 Q60 10 95 30 L105 140 Q60 155 15 140 Z" fill="url(#cupBody)" stroke="none"/>
           <ellipse cx="60" cy="30" rx="35" ry="12" fill="#cfd8dc" stroke="none"/>
         </svg>
-        <!-- Affiche la balle sous le cup levé qui a la perle, lors de la phase d'observation ou lors de la révélation -->
+        <!-- Ici , on affiche la balle sous le cup levé qui a la perle, lors de la phase d'observation ou lors de la révélation -->
         <div v-if="shell.hasPearl && liftedIndexes.includes(index)" class="pearl">🔵</div>
       </div>
     </div>
@@ -232,7 +229,6 @@ const resetScore = () => {
 </template>
 
 <style scoped>
-/* Nouveau CSS plus moderne et visuel */
 .game-container {
   max-width: 900px;
   margin: 5rem auto;
