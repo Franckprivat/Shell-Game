@@ -2,6 +2,8 @@
 
 Un jeu du bonneteau interactif développé avec **Vue 3**, **TypeScript** et **Vite**.
 
+![Écran de démarrage](./img/start.png)
+
 ## 🕹️ Principe du jeu
 
 Le but est de retrouver la balle cachée sous l'un des trois gobelets après un mélange aléatoire. Testez votre mémoire et votre chance !
@@ -10,6 +12,8 @@ Le but est de retrouver la balle cachée sous l'un des trois gobelets après un 
 - Observez bien où se trouve la balle.
 - Après le mélange, cliquez sur le gobelet où vous pensez que la balle se trouve.
 - Le score et la série de victoires sont sauvegardés localement.
+
+![Score remis à zéro](./img/score remis à zéro.png)
 
 ## 🚀 Démarrage rapide
 
@@ -54,11 +58,25 @@ Ouvrez [http://localhost:5173](http://localhost:5173) dans votre navigateur.
 npm run build
 ```
 
-### Prévisualiser le build
+### Utilisation avec Docker
+
+Vous pouvez lancer l'application dans un conteneur Docker pour simplifier le déploiement.
+
+#### 1. Construire l'image Docker
 
 ```bash
-npm run preview
+docker build -t jeu-du-bonneteau .
 ```
+
+#### 2. Lancer le conteneur
+
+```bash
+docker run -p 8080:80 jeu-du-bonneteau
+```
+
+L'application sera alors accessible sur [http://localhost:8080](http://localhost:8080).
+
+> ⚠️ Assurez-vous que le port 8080 n'est pas déjà utilisé sur votre machine.
 
 ## 🧪 Tests unitaires
 
