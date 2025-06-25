@@ -21,10 +21,6 @@ const liftedIndexes = ref<number[]>([])
 const shakeIndex = ref(-1)
 let lastPearlPosition = -1
 
-const shuffleAudio = ref<HTMLAudioElement | null>(null)
-const winAudio = ref<HTMLAudioElement | null>(null)
-const loseAudio = ref<HTMLAudioElement | null>(null)
-
 const messageClass = computed(() => {
   if (isLoading.value) return 'loading'
   if (message.value.includes('Bravo')) return 'success'
@@ -103,7 +99,6 @@ const startNewGame = async () => {
     gameState.value = 'shuffling'
 
     setTimeout(async () => {
-      shuffleAudio.value?.play()
       let swaps = Math.floor(Math.random() * 3) + 3
       for (let i = 0; i < swaps; i++) {
         const idx1 = Math.floor(Math.random() * 3)
@@ -140,7 +135,6 @@ const selectShell = (index: number) => {
     wins.value++
     streak.value++
     message.value = `🎉 Bravo ! Vous avez trouvé la balle ! Série de ${streak.value}`
-    winAudio.value?.play()
   } else {
     losses.value++
     streak.value = 0
@@ -150,7 +144,6 @@ const selectShell = (index: number) => {
       shells.value[correctShellIndex.value].revealed = true
       liftedIndexes.value = [index, correctShellIndex.value]
     }
-    loseAudio.value?.play()
   }
 
   setTimeout(() => {
@@ -221,10 +214,6 @@ const resetScore = () => {
     <div class="scoreboard">
       ✅ Victoires : {{ wins }} | ❌ Défaites : {{ losses }} | 🔥 Série : {{ streak }}
     </div>
-
-    <audio ref="shuffleAudio" src="/src/assets/shuffle.mp3"></audio>
-    <audio ref="winAudio" src="/src/assets/win.mp3"></audio>
-    <audio ref="loseAudio" src="/src/assets/lose.mp3"></audio>
   </div>
 </template>
 
